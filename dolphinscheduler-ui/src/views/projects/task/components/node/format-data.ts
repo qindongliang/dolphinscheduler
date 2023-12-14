@@ -23,17 +23,18 @@ import type {
   ISqoopTargetParams,
   ISqoopSourceParams,
   ILocalParam,
-  IDependTask,
-  RelationType
+  IDependentParameters
 } from './types'
+import {ref} from "vue";
 
 export function formatParams(data: INodeData): {
   processDefinitionCode: string
   upstreamCodes: string
   taskDefinitionJsonObj: object
 } {
+  const rdbmsSourceTypes = ref(['MYSQL', 'ORACLE', 'SQLSERVER', 'HANA'])
   const taskParams: ITaskParams = {}
-  if (data.taskType === 'SUB_PROCESS') {
+  if (data.taskType === 'SUB_PROCESS' || data.taskType === 'DYNAMIC') {
     taskParams.processDefinitionCode = data.processDefinitionCode
   }
 
@@ -63,6 +64,7 @@ export function formatParams(data: INodeData): {
     if (data.namespace) {
       taskParams.namespace = data.namespace
     }
+    taskParams.yarnQueue = data.yarnQueue
   }
 
   if (data.taskType === 'SPARK') {
@@ -71,6 +73,7 @@ export function formatParams(data: INodeData): {
     taskParams.numExecutors = data.numExecutors
     taskParams.executorMemory = data.executorMemory
     taskParams.executorCores = data.executorCores
+    taskParams.sqlExecutionType = data.sqlExecutionType
   }
 
   if (data.taskType === 'FLINK' || data.taskType === 'FLINK_STREAM') {
@@ -107,79 +110,67 @@ export function formatParams(data: INodeData): {
       taskParams.targetType = data.targetType
       let targetParams: ISqoopTargetParams = {}
       let sourceParams: ISqoopSourceParams = {}
-      switch (data.targetType) {
-        case 'HIVE':
-          targetParams = {
-            hiveDatabase: data.targetHiveDatabase,
-            hiveTable: data.targetHiveTable,
-            createHiveTable: data.targetHiveCreateTable,
-            dropDelimiter: data.targetHiveDropDelimiter,
-            hiveOverWrite: data.targetHiveOverWrite,
-            hiveTargetDir: data.targetHiveTargetDir,
-            replaceDelimiter: data.targetHiveReplaceDelimiter,
-            hivePartitionKey: data.targetHivePartitionKey,
-            hivePartitionValue: data.targetHivePartitionValue
-          }
-          break
-        case 'HDFS':
-          targetParams = {
-            targetPath: data.targetHdfsTargetPath,
-            deleteTargetDir: data.targetHdfsDeleteTargetDir,
-            compressionCodec: data.targetHdfsCompressionCodec,
-            fileType: data.targetHdfsFileType,
-            fieldsTerminated: data.targetHdfsFieldsTerminated,
-            linesTerminated: data.targetHdfsLinesTerminated
-          }
-          break
-        case 'MYSQL':
-          targetParams = {
-            targetType: data.targetMysqlType,
-            targetDatasource: data.targetMysqlDatasource,
-            targetTable: data.targetMysqlTable,
-            targetColumns: data.targetMysqlColumns,
-            fieldsTerminated: data.targetMysqlFieldsTerminated,
-            linesTerminated: data.targetMysqlLinesTerminated,
-            isUpdate: data.targetMysqlIsUpdate,
-            targetUpdateKey: data.targetMysqlTargetUpdateKey,
-            targetUpdateMode: data.targetMysqlUpdateMode
-          }
-          break
-        default:
-          break
+      if (data.targetType === 'HIVE') {
+        targetParams = {
+          hiveDatabase: data.targetHiveDatabase,
+          hiveTable: data.targetHiveTable,
+          createHiveTable: data.targetHiveCreateTable,
+          dropDelimiter: data.targetHiveDropDelimiter,
+          hiveOverWrite: data.targetHiveOverWrite,
+          hiveTargetDir: data.targetHiveTargetDir,
+          replaceDelimiter: data.targetHiveReplaceDelimiter,
+          hivePartitionKey: data.targetHivePartitionKey,
+          hivePartitionValue: data.targetHivePartitionValue
+        }
+      } else if (data.targetType === 'HDFS') {
+        targetParams = {
+          targetPath: data.targetHdfsTargetPath,
+          deleteTargetDir: data.targetHdfsDeleteTargetDir,
+          compressionCodec: data.targetHdfsCompressionCodec,
+          fileType: data.targetHdfsFileType,
+          fieldsTerminated: data.targetHdfsFieldsTerminated,
+          linesTerminated: data.targetHdfsLinesTerminated
+        }
+      } else if (rdbmsSourceTypes.value.some(target => target === data.targetType)){
+        targetParams = {
+          targetType: data.targetMysqlType,
+          targetDatasource: data.targetMysqlDatasource,
+          targetTable: data.targetMysqlTable,
+          targetColumns: data.targetMysqlColumns,
+          fieldsTerminated: data.targetMysqlFieldsTerminated,
+          linesTerminated: data.targetMysqlLinesTerminated,
+          isUpdate: data.targetMysqlIsUpdate,
+          targetUpdateKey: data.targetMysqlTargetUpdateKey,
+          targetUpdateMode: data.targetMysqlUpdateMode
+        }
       }
-      switch (data.sourceType) {
-        case 'MYSQL':
-          sourceParams = {
-            srcTable: data.srcQueryType === '1' ? '' : data.srcTable,
-            srcColumnType: data.srcQueryType === '1' ? '0' : data.srcColumnType,
-            srcColumns:
+      if (rdbmsSourceTypes.value.some(target => target === data.sourceType)) {
+        sourceParams = {
+          srcTable: data.srcQueryType === '1' ? '' : data.srcTable,
+          srcColumnType: data.srcQueryType === '1' ? '0' : data.srcColumnType,
+          srcColumns:
               data.srcQueryType === '1' || data.srcColumnType === '0'
-                ? ''
-                : data.srcColumns,
-            srcQuerySql:
+                  ? ''
+                  : data.srcColumns,
+          srcQuerySql:
               data.srcQueryType === '0' ? '' : data.sourceMysqlSrcQuerySql,
-            srcQueryType: data.srcQueryType,
-            srcType: data.sourceMysqlType,
-            srcDatasource: data.sourceMysqlDatasource,
-            mapColumnHive: data.mapColumnHive,
-            mapColumnJava: data.mapColumnJava
-          }
-          break
-        case 'HDFS':
-          sourceParams = {
-            exportDir: data.sourceHdfsExportDir
-          }
-          break
-        case 'HIVE':
-          sourceParams = {
-            hiveDatabase: data.sourceHiveDatabase,
-            hiveTable: data.sourceHiveTable,
-            hivePartitionKey: data.sourceHivePartitionKey,
-            hivePartitionValue: data.sourceHivePartitionValue
-          }
-          break
-        default:
-          break
+          srcQueryType: data.srcQueryType,
+          srcType: data.sourceMysqlType,
+          srcDatasource: data.sourceMysqlDatasource,
+          mapColumnHive: data.mapColumnHive,
+          mapColumnJava: data.mapColumnJava
+        }
+      } else if (data.sourceType === 'HDFS') {
+        sourceParams = {
+          exportDir: data.sourceHdfsExportDir
+        }
+      } else if (data.sourceType === 'HIVE') {
+        sourceParams = {
+          hiveDatabase: data.sourceHiveDatabase,
+          hiveTable: data.sourceHiveTable,
+          hivePartitionKey: data.sourceHivePartitionKey,
+          hivePartitionValue: data.sourceHivePartitionValue
+        }
       }
       taskParams.targetParams = JSON.stringify(targetParams)
       taskParams.sourceParams = JSON.stringify(sourceParams)
@@ -203,6 +194,10 @@ export function formatParams(data: INodeData): {
       if (data.udfs) taskParams.udfs = data.udfs.join(',')
       taskParams.connParams = data.connParams
     }
+
+    if (data.type === 'KYUUBI') {
+      if (data.udfs) taskParams.udfs = data.udfs.join(',')
+    }
   }
 
   if (data.taskType === 'PROCEDURE') {
@@ -212,21 +207,21 @@ export function formatParams(data: INodeData): {
   }
 
   if (data.taskType === 'SEATUNNEL') {
-    taskParams.engine = data.engine
+    taskParams.startupScript = data.startupScript
     taskParams.useCustom = data.useCustom
     taskParams.rawScript = data.rawScript
-    switch (data.engine) {
-      case 'FLINK':
-        taskParams.runMode = data.runMode
-        taskParams.others = data.others
-        break
-      case 'SPARK':
-        taskParams.deployMode = data.deployMode
-        taskParams.master = data.master
-        taskParams.masterUrl = data.masterUrl
-        break
-      default:
-        break
+    if (data.startupScript?.includes('flink')) {
+      taskParams.runMode = data.runMode
+      taskParams.others = data.others
+    }
+    if (data.startupScript?.includes('spark')) {
+      taskParams.deployMode = data.deployMode
+      taskParams.master = data.master
+      taskParams.masterUrl = data.masterUrl
+    }
+    if (data.startupScript === 'seatunnel.sh') {
+      taskParams.deployMode = data.deployMode
+      taskParams.others = data.others
     }
   }
 
@@ -275,6 +270,9 @@ export function formatParams(data: INodeData): {
   }
   if (data.taskType === 'DEPENDENT') {
     taskParams.dependence = {
+      checkInterval: data.checkInterval,
+      failurePolicy: data.failurePolicy,
+      failureWaitingTime: data.failureWaitingTime,
       relation: data.relation,
       dependTaskList: data.dependTaskList
     }
@@ -290,6 +288,7 @@ export function formatParams(data: INodeData): {
       operator: data.operator,
       src_connector_type: data.src_connector_type,
       src_datasource_id: data.src_datasource_id,
+      src_database: data.src_database,
       field_length: data.field_length,
       begin_time: data.begin_time,
       deadline: data.deadline,
@@ -304,6 +303,7 @@ export function formatParams(data: INodeData): {
       statistics_name: data.statistics_name,
       target_connector_type: data.target_connector_type,
       target_datasource_id: data.target_datasource_id,
+      target_database: data.target_database,
       target_table: data.target_table,
       threshold: data.threshold,
       mapping_columns: JSON.stringify(data.mapping_columns)
@@ -315,7 +315,9 @@ export function formatParams(data: INodeData): {
       executorCores: data.executorCores,
       executorMemory: data.executorMemory,
       numExecutors: data.numExecutors,
-      others: data.others
+      others: data.others,
+      yarnQueue: data.yarnQueue,
+      sqlExecutionType: data.sqlExecutionType
     }
   }
 
@@ -330,8 +332,12 @@ export function formatParams(data: INodeData): {
     taskParams.noteId = data.noteId
     taskParams.paragraphId = data.paragraphId
     taskParams.restEndpoint = data.restEndpoint
+    taskParams.username = data.username
+    taskParams.password = data.password
     taskParams.productionNoteDirectory = data.productionNoteDirectory
     taskParams.parameters = data.parameters
+    taskParams.datasource = data.datasource
+    taskParams.type = data.type
   }
 
   if (data.taskType === 'K8S') {
@@ -339,7 +345,15 @@ export function formatParams(data: INodeData): {
     taskParams.minCpuCores = data.minCpuCores
     taskParams.minMemorySpace = data.minMemorySpace
     taskParams.image = data.image
+    taskParams.imagePullPolicy = data.imagePullPolicy
     taskParams.command = data.command
+    taskParams.args = data.args
+    taskParams.customizedLabels = data.customizedLabels
+    taskParams.nodeSelectors = data.nodeSelectors
+    taskParams.datasource = data.datasource
+    taskParams.type = data.type
+    taskParams.kubeConfig = data.kubeConfig
+    taskParams.pullSecret = data.pullSecret
   }
 
   if (data.taskType === 'JUPYTER') {
@@ -385,6 +399,11 @@ export function formatParams(data: INodeData): {
 
   if (data.taskType === 'SAGEMAKER') {
     taskParams.sagemakerRequestJson = data.sagemakerRequestJson
+    taskParams.username = data.username
+    taskParams.password = data.password
+    taskParams.datasource = data.datasource
+    taskParams.type = data.type
+    taskParams.awsRegion = data.awsRegion
   }
   if (data.taskType === 'PYTORCH') {
     taskParams.script = data.script
@@ -465,6 +484,19 @@ export function formatParams(data: INodeData): {
     taskParams.pipelineName = data.pipelineName
   }
 
+  if (data.taskType === 'REMOTESHELL') {
+    taskParams.type = data.type
+    taskParams.datasource = data.datasource
+  }
+
+  if (data.taskType === 'DYNAMIC') {
+    taskParams.processDefinitionCode = data.processDefinitionCode
+    taskParams.maxNumOfSubWorkflowInstances = data.maxNumOfSubWorkflowInstances
+    taskParams.degreeOfParallelism = data.degreeOfParallelism
+    taskParams.filterCondition = data.filterCondition
+    taskParams.listParameters = data.listParameters
+  }
+
   let timeoutNotifyStrategy = ''
   if (data.timeoutNotifyStrategy) {
     if (data.timeoutNotifyStrategy.length === 1) {
@@ -487,7 +519,7 @@ export function formatParams(data: INodeData): {
         : '0',
       failRetryTimes: data.failRetryTimes ? String(data.failRetryTimes) : '0',
       flag: data.flag,
-      isCache: data.isCache ? "YES" : "NO",
+      isCache: data.isCache ? 'YES' : 'NO',
       name: data.name,
       taskGroupId: data.taskGroupId,
       taskGroupPriority: data.taskGroupPriority,
@@ -499,7 +531,9 @@ export function formatParams(data: INodeData): {
         initScript: data.initScript,
         rawScript: data.rawScript,
         resourceList: data.resourceList?.length
-          ? data.resourceList.map((fullName: string) => ({ resourceName: `${fullName}` }))
+          ? data.resourceList.map((fullName: string) => ({
+              resourceName: `${fullName}`
+            }))
           : [],
         ...taskParams
       },
@@ -548,7 +582,7 @@ export function formatModel(data: ITaskData) {
   }
   if (data.taskParams?.resourceList) {
     params.resourceList = data.taskParams.resourceList.map(
-      (item: { resourceName: string }) => (`${item.resourceName}`)
+      (item: { resourceName: string }) => `${item.resourceName}`
     )
   }
   if (data.taskParams?.mainJar) {
@@ -563,6 +597,7 @@ export function formatModel(data: ITaskData) {
     const targetParams: ISqoopTargetParams = JSON.parse(
       data.taskParams.targetParams
     )
+    params.targetType = data.taskParams.targetType
     params.targetHiveDatabase = targetParams.hiveDatabase
     params.targetHiveTable = targetParams.hiveTable
     params.targetHiveCreateTable = targetParams.createHiveTable
@@ -638,7 +673,12 @@ export function formatModel(data: ITaskData) {
   }
 
   if (data.taskParams?.dependence) {
-    const dependence: { relation?: RelationType, dependTaskList?: IDependTask[] } = JSON.parse(JSON.stringify(data.taskParams.dependence))
+    const dependence: IDependentParameters = JSON.parse(
+      JSON.stringify(data.taskParams.dependence)
+    )
+    params.checkInterval = dependence.checkInterval
+    params.failurePolicy = dependence.failurePolicy
+    params.failureWaitingTime = dependence.failureWaitingTime
     params.dependTaskList = dependence.dependTaskList || []
     params.relation = dependence.relation
   }
@@ -656,6 +696,7 @@ export function formatModel(data: ITaskData) {
       data.taskParams.ruleInputParameter.src_connector_type
     params.src_datasource_id =
       data.taskParams.ruleInputParameter.src_datasource_id
+    params.src_database = data.taskParams.ruleInputParameter.src_database
     params.src_table = data.taskParams.ruleInputParameter.src_table
     params.field_length = data.taskParams.ruleInputParameter.field_length
     params.begin_time = data.taskParams.ruleInputParameter.begin_time
@@ -673,6 +714,7 @@ export function formatModel(data: ITaskData) {
       data.taskParams.ruleInputParameter.target_connector_type
     params.target_datasource_id =
       data.taskParams.ruleInputParameter.target_datasource_id
+    params.target_database = data.taskParams.ruleInputParameter.target_database
     params.target_table = data.taskParams.ruleInputParameter.target_table
     params.threshold = data.taskParams.ruleInputParameter.threshold
     if (data.taskParams.ruleInputParameter.mapping_columns)
@@ -688,6 +730,7 @@ export function formatModel(data: ITaskData) {
     params.executorMemory = data.taskParams.sparkParameters.executorMemory
     params.numExecutors = data.taskParams.sparkParameters.numExecutors
     params.others = data.taskParams.sparkParameters.others
+    params.sqlExecutionType = data.taskParams.sparkParameters.sqlExecutionType
   }
 
   if (data.taskParams?.conditionResult?.successNode?.length) {

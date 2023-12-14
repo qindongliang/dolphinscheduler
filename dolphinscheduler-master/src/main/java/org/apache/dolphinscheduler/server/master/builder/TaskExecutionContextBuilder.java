@@ -17,7 +17,8 @@
 
 package org.apache.dolphinscheduler.server.master.builder;
 
-import static org.apache.dolphinscheduler.common.constants.Constants.SEC_2_MINUTES_TIME_UNIT;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.apache.dolphinscheduler.common.constants.Constants.MINUTE_2_SECOND_TIME_UNIT;
 
 import org.apache.dolphinscheduler.common.enums.TimeoutFlag;
 import org.apache.dolphinscheduler.common.utils.DateUtils;
@@ -85,7 +86,7 @@ public class TaskExecutionContextBuilder {
             if (taskDefinition.getTimeoutNotifyStrategy() == TaskTimeoutStrategy.FAILED
                     || taskDefinition.getTimeoutNotifyStrategy() == TaskTimeoutStrategy.WARNFAILED) {
                 taskExecutionContext.setTaskTimeout(
-                        Math.min(taskDefinition.getTimeout() * SEC_2_MINUTES_TIME_UNIT, Integer.MAX_VALUE));
+                        Math.min(taskDefinition.getTimeout() * MINUTE_2_SECOND_TIME_UNIT, Integer.MAX_VALUE));
             }
         }
         taskExecutionContext.setTaskParams(taskDefinition.getTaskParams());
@@ -105,7 +106,6 @@ public class TaskExecutionContextBuilder {
         taskExecutionContext.setExecutorId(processInstance.getExecutorId());
         taskExecutionContext.setCmdTypeIfComplement(processInstance.getCmdTypeIfComplement().getCode());
         taskExecutionContext.setTenantCode(processInstance.getTenantCode());
-        taskExecutionContext.setQueue(processInstance.getQueue());
         return this;
     }
 
@@ -166,6 +166,11 @@ public class TaskExecutionContextBuilder {
         return this;
     }
 
+    public TaskExecutionContextBuilder buildWorkflowInstanceHost(String masterHost) {
+        taskExecutionContext.setWorkflowInstanceHost(masterHost);
+        return this;
+    }
+
     /**
      * create
      *
@@ -173,6 +178,7 @@ public class TaskExecutionContextBuilder {
      */
 
     public TaskExecutionContext create() {
+        checkNotNull(taskExecutionContext.getWorkflowInstanceHost(), "The workflow instance host cannot be empty");
         return taskExecutionContext;
     }
 
